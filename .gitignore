@@ -1,0 +1,8 @@
+node_modules/
+.tools/
+.next/
+dist/
+__pycache__/
+.pytest_cache/
+.env
+deployments/*.local.json
