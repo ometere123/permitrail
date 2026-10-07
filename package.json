@@ -1,0 +1,14 @@
+{
+  "name": "permitrail",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cli:version": "node scripts/genlayer-local.mjs --version",
+    "network:info": "node scripts/genlayer-local.mjs network info",
+    "test": "pytest -q",
+    "lint:contracts": "genvm-lint check contracts/regscope.py && genvm-lint check contracts/regulated_escrow.py"
+  },
+  "devDependencies": {
+    "genlayer": "0.39.1"
+  }
+}

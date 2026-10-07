@@ -16,7 +16,6 @@ class RegulatedEscrow(gl.Contract):
 
     def __init__(self, oracle: Address):
         self.oracle = oracle
-        self.mandates = TreeMap()
         self.next_id = u256(0)
 
     @gl.public.write.payable

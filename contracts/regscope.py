@@ -28,13 +28,6 @@ class RegulatoryScope(gl.Contract):
     assessment_seq: u256
 
     def __init__(self):
-        self.scope_owner = TreeMap()
-        self.scope_data = TreeMap()
-        self.latest_attempt = TreeMap()
-        self.latest_authoritative = TreeMap()
-        self.assessments = TreeMap()
-        self.assessment_status = TreeMap()
-        self.assessment_scope = TreeMap()
         self.assessment_seq = u256(0)
 
     @gl.public.write
