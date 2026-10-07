@@ -5,16 +5,18 @@ import { createClient } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
 import { ExecutionResult, TransactionStatus } from "genlayer-js/types";
 
-const SCOPE = "0xC6b1e8beF3501E8b2439968D4f6FB6d3b0176003" as `0x${string}`;
-const ESCROW = "0x7F8aec2fd9665D3f37482540001F4e43E8C8524E" as `0x${string}`;
-const RPC = "https://studio.genlayer.com/api";
-const EXPLORER = "https://explorer-studio.genlayer.com";
+const SCOPE = process.env.NEXT_PUBLIC_REGULATORY_SCOPE ?? "";
+const ESCROW = process.env.NEXT_PUBLIC_REGULATED_ESCROW ?? "";
+const RPC = process.env.NEXT_PUBLIC_GENLAYER_RPC ?? "";
+const EXPLORER = process.env.NEXT_PUBLIC_GENLAYER_EXPLORER ?? "";
+const CHAIN_ID = process.env.NEXT_PUBLIC_GENLAYER_CHAIN_ID ?? "";
 const JURISDICTIONS = "AT BE BG HR CY CZ DK EE FI FR DE GR HU IE IS IT LV LI LT LU MT NL NO PL PT RO SK SI ES SE".split(" ");
 
 type Provider = { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
 type Receipt = { txExecutionResultName?: string };
 
-function readClient() { return createClient({ chain: studionet, endpoint: RPC }); }
+function configured(value: string, name: string) { if (!value) throw new Error(`Missing ${name}. Add it to Vercel Environment Variables.`); return value; }
+function readClient() { return createClient({ chain: studionet, endpoint: configured(RPC, "NEXT_PUBLIC_GENLAYER_RPC") }); }
 function walletClient(account: string) { return createClient({ chain: studionet, account: account as `0x${string}`, provider: (window as Window & { ethereum?: Provider }).ethereum }); }
 function short(value: string) { return value ? `${value.slice(0, 8)}…${value.slice(-6)}` : "—"; }
 function genToWei(value: string) {
@@ -50,7 +52,7 @@ export default function Home() {
       const accounts = await ethereum.request({ method: "eth_requestAccounts" }) as string[];
       const next = accounts[0] ?? "";
       if (next) await createClient({ chain: studionet, account: next as `0x${string}`, provider: ethereum }).connect("studionet");
-      setAccount(next); setMessage("Wallet connected. The write client is pinned to Studionet 61999.");
+      setAccount(next); setMessage(`Wallet connected. The write client is pinned to chain ${CHAIN_ID || "the configured network"}.`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Wallet connection was rejected."); }
   };
 
@@ -69,39 +71,39 @@ export default function Home() {
   const pinScope = async () => {
     if (!scope.lei || !scope.domain) { setMessage("LEI and expected domain are required."); return; }
     const id = await scopeDigest(scope.lei, scope.services, scope.domain, scope.policy);
-    try { await runWrite("Pin scope", (client) => client.writeContract({ address: SCOPE, functionName: "pin_scope", args: [scope.lei, scope.services, scope.domain, scope.policy], value: 0n })); setScopeId(id); setMessage(`Scope pinned: ${id}.`); } catch { /* status already shown */ }
+    try { await runWrite("Pin scope", (client) => client.writeContract({ address: configured(SCOPE, "NEXT_PUBLIC_REGULATORY_SCOPE") as `0x${string}`, functionName: "pin_scope", args: [scope.lei, scope.services, scope.domain, scope.policy], value: 0n })); setScopeId(id); setMessage(`Scope pinned: ${id}.`); } catch { /* status already shown */ }
   };
 
   const refreshHeads = async () => {
     if (!scopeId) { setMessage("Enter or create a scope first."); return; }
-    try { const raw = await readClient().readContract({ address: SCOPE, functionName: "get_heads", args: [scopeId] }) as string; setHeads(JSON.parse(raw)); setMessage("Scope heads refreshed from Studionet."); } catch (error) { setMessage(error instanceof Error ? error.message : "Could not read scope heads."); }
+    try { const raw = await readClient().readContract({ address: configured(SCOPE, "NEXT_PUBLIC_REGULATORY_SCOPE") as `0x${string}`, functionName: "get_heads", args: [scopeId] }) as string; setHeads(JSON.parse(raw)); setMessage("Scope heads refreshed from Studionet."); } catch (error) { setMessage(error instanceof Error ? error.message : "Could not read scope heads."); }
   };
 
   const recordAssessment = async () => {
     if (!scopeId) { setMessage("Pin a scope before recording an assessment."); return; }
-    try { await runWrite("Record assessment", (client) => client.writeContract({ address: SCOPE, functionName: "assess", args: [scopeId, BigInt(Math.floor(Date.now() / 1000)), "2026-10-07", "2026-10-07", "2026-10-07", "2027-10-07", assessment.sourceManifest, assessment.matchedRows, assessment.semanticEvidence, JSON.stringify(matrix), assessment.serviceEvidence, "AUTHORITATIVE"], value: 0n })); await refreshHeads(); } catch { /* status already shown */ }
+    try { await runWrite("Record assessment", (client) => client.writeContract({ address: configured(SCOPE, "NEXT_PUBLIC_REGULATORY_SCOPE") as `0x${string}`, functionName: "assess", args: [scopeId, BigInt(Math.floor(Date.now() / 1000)), "2026-10-07", "2026-10-07", "2026-10-07", "2027-10-07", assessment.sourceManifest, assessment.matchedRows, assessment.semanticEvidence, JSON.stringify(matrix), assessment.serviceEvidence, "AUTHORITATIVE"], value: 0n })); await refreshHeads(); } catch { /* status already shown */ }
   };
 
   const openMandate = async () => {
     if (!scopeId || !mandateForm.seller) { setMessage("Scope ID and seller address are required."); return; }
-    try { await runWrite("Open mandate", (client) => client.writeContract({ address: ESCROW, functionName: "open_mandate", args: [mandateForm.seller, scopeId, assessment.jurisdiction, scope.services, BigInt(Math.floor(Date.now() / 1000) + Number(mandateForm.expiryHours) * 3600)], value: genToWei(mandateForm.amount) })); } catch { /* status already shown */ }
+    try { await runWrite("Open mandate", (client) => client.writeContract({ address: configured(ESCROW, "NEXT_PUBLIC_REGULATED_ESCROW") as `0x${string}`, functionName: "open_mandate", args: [mandateForm.seller, scopeId, assessment.jurisdiction, scope.services, BigInt(Math.floor(Date.now() / 1000) + Number(mandateForm.expiryHours) * 3600)], value: genToWei(mandateForm.amount) })); } catch { /* status already shown */ }
   };
 
   const readMandate = async () => {
-    try { const raw = await readClient().readContract({ address: ESCROW, functionName: "get_mandate", args: [mandateId] }) as string; setMandate(raw ? JSON.parse(raw) : null); setMessage(raw ? "Mandate read from Studionet." : "No mandate exists for that ID."); } catch (error) { setMessage(error instanceof Error ? error.message : "Could not read mandate."); }
+    try { const raw = await readClient().readContract({ address: configured(ESCROW, "NEXT_PUBLIC_REGULATED_ESCROW") as `0x${string}`, functionName: "get_mandate", args: [mandateId] }) as string; setMandate(raw ? JSON.parse(raw) : null); setMessage(raw ? "Mandate read from Studionet." : "No mandate exists for that ID."); } catch (error) { setMessage(error instanceof Error ? error.message : "Could not read mandate."); }
   };
   const mandateWrite = async (method: "accept" | "settle" | "refund_expired") => {
-    try { await runWrite(method === "refund_expired" ? "Refund mandate" : `${method[0].toUpperCase()}${method.slice(1)} mandate`, (client) => client.writeContract({ address: ESCROW, functionName: method, args: method === "settle" ? [mandateId, 86400n] : [mandateId], value: 0n })); await readMandate(); } catch { /* status already shown */ }
+    try { await runWrite(method === "refund_expired" ? "Refund mandate" : `${method[0].toUpperCase()}${method.slice(1)} mandate`, (client) => client.writeContract({ address: configured(ESCROW, "NEXT_PUBLIC_REGULATED_ESCROW") as `0x${string}`, functionName: method, args: method === "settle" ? [mandateId, 86400n] : [mandateId], value: 0n })); await readMandate(); } catch { /* status already shown */ }
   };
   const checkSettlement = async () => {
     if (!scopeId) { setMessage("Pin a scope first."); return; }
-    try { const allowed = await readClient().readContract({ address: SCOPE, functionName: "can_settle", args: [scopeId, assessment.jurisdiction, scope.services, 86400n] }) as boolean; setCanSettle(allowed); setMessage(allowed ? "Oracle authorizes settlement." : "Oracle is fail-closed: settlement is not authorized."); } catch (error) { setMessage(error instanceof Error ? error.message : "Could not check settlement."); }
+    try { const allowed = await readClient().readContract({ address: configured(SCOPE, "NEXT_PUBLIC_REGULATORY_SCOPE") as `0x${string}`, functionName: "can_settle", args: [scopeId, assessment.jurisdiction, scope.services, 86400n] }) as boolean; setCanSettle(allowed); setMessage(allowed ? "Oracle authorizes settlement." : "Oracle is fail-closed: settlement is not authorized."); } catch (error) { setMessage(error instanceof Error ? error.message : "Could not check settlement."); }
   };
   const input = (value: string, onChange: (next: string) => void, placeholder?: string) => <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />;
 
   return <main>
     <nav><span className="mark">PERMITRAIL</span><button onClick={connect} disabled={busy}>{account ? short(account) : "connect wallet"}</button></nav>
-    <section className="hero"><p className="eyebrow">REGULATORY EXECUTION LAYER · STUDIONET 61999</p><h1>Move regulated value<br /><i>with evidence.</i></h1><p className="lede">PermitRail turns independently verified regulatory scope into a bilateral settlement decision. Evidence is visible. Authority is pinned. Release is mechanical.</p><div className="actions"><button className="primary" onClick={connect} disabled={busy}>connect to begin</button><a href={`${EXPLORER}/`} target="_blank" rel="noreferrer">open explorer ↗</a></div><p className="status"><span className={busy ? "pulse" : "dot"} />{message}</p></section>
+    <section className="hero"><p className="eyebrow">REGULATORY EXECUTION LAYER · STUDIONET {CHAIN_ID || "CONFIGURED NETWORK"}</p><h1>Move regulated value<br /><i>with evidence.</i></h1><p className="lede">PermitRail turns independently verified regulatory scope into a bilateral settlement decision. Evidence is visible. Authority is pinned. Release is mechanical.</p><div className="actions"><button className="primary" onClick={connect} disabled={busy}>connect to begin</button>{EXPLORER && <a href={`${EXPLORER}/`} target="_blank" rel="noreferrer">open explorer ↗</a>}</div><p className="status"><span className={busy ? "pulse" : "dot"} />{message}</p></section>
     <section className="panel"><div><p className="eyebrow">EU / EEA COVERAGE MATRIX</p><h2>One scope. Thirty jurisdictions.</h2><p className="panel-note">A live assessment is stored as a complete matrix. The view below is the proposed assessment payload; the oracle remains fail-closed until an authoritative result is finalized.</p></div><div className="matrix">{JURISDICTIONS.map((code) => <span key={code} className={code === assessment.jurisdiction ? "selected" : "clear"}>{code}</span>)}</div></section>
     <section className="workspace"><div className="section-head"><div><p className="eyebrow">01 / SCOPE</p><h2>Pin the commercial boundary</h2></div><span className="contract">{short(SCOPE)}</span></div><div className="form-grid">{input(scope.lei, (value) => setScope({ ...scope, lei: value }), "LEI / legal entity identifier")}{input(scope.services, (value) => setScope({ ...scope, services: value }), "Required service, e.g. PAYMENTS")}{input(scope.domain, (value) => setScope({ ...scope, domain: value }), "Expected regulatory domain")}{input(scope.policy, (value) => setScope({ ...scope, policy: value }), "Policy version")}</div><div className="row"><button className="primary" onClick={pinScope} disabled={busy}>pin scope onchain</button>{scopeId && <code>{scopeId}</code>}</div></section>
     <section className="workspace"><div className="section-head"><div><p className="eyebrow">02 / EVIDENCE</p><h2>Record the authoritative read</h2></div><button onClick={refreshHeads} disabled={busy || !scopeId}>refresh heads</button></div><div className="form-grid">{input(assessment.jurisdiction, (value) => setAssessment({ ...assessment, jurisdiction: value.toUpperCase() }), "Jurisdiction code")}{input(assessment.serviceEvidence, (value) => setAssessment({ ...assessment, serviceEvidence: value }), "Service evidence")}{input(assessment.sourceManifest, (value) => setAssessment({ ...assessment, sourceManifest: value }), "Source manifest")}{input(assessment.matchedRows, (value) => setAssessment({ ...assessment, matchedRows: value }), "Matched regulator rows")}</div><textarea value={assessment.semanticEvidence} onChange={(event) => setAssessment({ ...assessment, semanticEvidence: event.target.value })} /><div className="row"><button className="primary" onClick={recordAssessment} disabled={busy || !scopeId}>record assessment</button>{heads && <span className="readout">attempt {short(heads.latest_attempt_id)} · authority {short(heads.latest_authoritative_id)}</span>}</div></section>
