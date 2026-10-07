@@ -1,6 +1,7 @@
 import "./styles.css";
 import type { ReactNode } from "react";
+import { Shell } from "./components/Shell";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en"><body><Shell>{children}</Shell></body></html>;
 }
